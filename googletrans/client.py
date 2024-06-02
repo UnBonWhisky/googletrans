@@ -251,7 +251,7 @@ class Translator:
         # actual source language that will be recognized by Google Translator when the
         # src passed is equal to auto.
         try:
-            src = data[2]
+            src = self.detect(text).lang
         except Exception:  # pragma: nocover
             pass
 

@@ -1,7 +1,7 @@
 DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
 
 DEFAULT_CLIENT_SERVICE_URLS = (
-    'translate.google.com',
+    'translate.googleapis.com',
 )
 
 DEFAULT_FALLBACK_SERVICE_URLS = (
@@ -151,6 +151,7 @@ LANGUAGES = {
     'my': 'myanmar (burmese)',
     'ne': 'nepali',
     'no': 'norwegian',
+    'om': 'oromo',
     'or': 'odia',
     'ps': 'pashto',
     'fa': 'persian',

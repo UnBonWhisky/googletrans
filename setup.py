@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
-import re
 import os.path
+import re
+
 from setuptools import setup, find_packages
 
 
@@ -30,40 +30,44 @@ def get_description():
 
 
 def get_readme():
-    return get_file(os.path.dirname(__file__), 'README.md')
+    return get_file(os.path.dirname(__file__), 'README.rst')
 
 
-with open("requirements.txt", encoding="utf-8") as r:
-    install_requires = [i.strip() for i in r if not i.startswith('#')]
+def install():
+    setup(
+        name='googletrans',
+        version=get_version(),
+        description=get_description(),
+        long_description=get_readme(),
+        license='MIT',
+        author='SuHun Han',
+        author_email='ssut' '@' 'ssut.me',
+        url='https://github.com/ssut/py-googletrans',
+        classifiers=['Development Status :: 5 - Production/Stable',
+                     'Intended Audience :: Education',
+                     'Intended Audience :: End Users/Desktop',
+                     'License :: Freeware',
+                     'Operating System :: POSIX',
+                     'Operating System :: Microsoft :: Windows',
+                     'Operating System :: MacOS :: MacOS X',
+                     'Topic :: Education',
+                     'Programming Language :: Python',
+                     'Programming Language :: Python :: 3.6',
+                     'Programming Language :: Python :: 3.7',
+                     'Programming Language :: Python :: 3.8'],
+        packages=find_packages(exclude=['docs', 'tests']),
+        keywords='google translate translator',
+        install_requires=[
+            'httpx==0.13.3',
+        ],
+        python_requires= '>=3.6',
+        tests_require=[
+            'pytest',
+            'coveralls',
+        ],
+        scripts=['translate']
+    )
 
 
-setup(
-    name='googletrans-py',
-    version=get_version(),
-    description=get_description(),
-    long_description=get_readme(),
-    license='MIT',
-    long_description_content_type="text/markdown",
-    author='StarkProgrammer',
-    author_email='starkbotsindustries@gmail.com',
-    url='https://github.com/StarkBotsIndustries/googletrans',
-    classifiers=[
-        'Development Status :: 5 - Production/Stable',
-        'Intended Audience :: Education',
-        'Intended Audience :: End Users/Desktop',
-        'License :: Freeware',
-        'Operating System :: POSIX',
-        'Operating System :: Microsoft :: Windows',
-        'Operating System :: MacOS :: MacOS X',
-        'Topic :: Education',
-        'Programming Language :: Python',
-        'Programming Language :: Python :: 3.7',
-        'Programming Language :: Python :: 3.8',
-        'Programming Language :: Python :: 3.9',
-        'Programming Language :: Python :: 3.10'
-    ],
-    packages=find_packages(),
-    keywords='google translate translator',
-    install_requires=install_requires,
-    python_requires='>=3.7',
-)
+if __name__ == "__main__":
+    install()

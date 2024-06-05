@@ -61,7 +61,7 @@ class Translator:
                  timeout: Timeout = None,
                  http2=True):
 
-        self.client = httpx.Client(http2=http2)
+        self.client = httpx.AsyncClient(http2=http2)
         if proxies is not None:  # pragma: nocover
             self.client.proxies = proxies
 
@@ -109,7 +109,7 @@ class Translator:
             return self.service_urls[0]
         return random.choice(self.service_urls)
 
-    def _translate_to_detect(self, text: str, dest: str, src: str):
+    async def _translate_to_detect(self, text: str, dest: str, src: str):
         url = urls.TRANSLATE_RPC.format(host=self._pick_service_url().replace('googleapis', 'google'))
         data = {
             'f.req': self._build_rpc_request(text, dest, src),
@@ -122,7 +122,7 @@ class Translator:
             'soc-device': 1,
             'rt': 'c',
         }
-        r = self.client.post(url, params=params, data=data)
+        r = await self.client.post(url, params=params, data=data)
 
         if r.status_code != 200 and self.raise_exception:
             raise Exception('Unexpected status code "{}" from {}'.format(
@@ -130,16 +130,16 @@ class Translator:
 
         return r.text, r
 
-    def _translate(self, text, dest, src, override):
+    async def _translate(self, text, dest, src, override):
         token = '' #dummy default value here as it is not used by api client
         if self.client_type == 'webapp':
-            token = self.token_acquirer.do(text)
+            token = await self.token_acquirer.do(text)
 
         params = utils.build_params(client=self.client_type, query=text, src=src, dest=dest,
                                     token=token, override=override)
 
         url = urls.TRANSLATE.format(host=self._pick_service_url())
-        r = self.client.get(url, params=params)
+        r = await self.client.get(url, params=params)
 
         if r.status_code == 200:
             data = utils.format_json(r.text)
@@ -175,7 +175,7 @@ class Translator:
 
         return extra
 
-    def translate(self, text, dest='en', src='auto', **kwargs):
+    async def translate(self, text, dest='en', src='auto', **kwargs):
         """Translate text from source language to destination language
 
         :param text: The source text(s) to be translated. Batch translation is supported via sequence input.
@@ -236,12 +236,12 @@ class Translator:
         if isinstance(text, list):
             result = []
             for item in text:
-                translated = self.translate(item, dest=dest, src=src, **kwargs)
+                translated = await self.translate(item, dest=dest, src=src, **kwargs)
                 result.append(translated)
             return result
 
         origin = text
-        data, response = self._translate(text, dest, src, kwargs)
+        data, response = await self._translate(text, dest, src, kwargs)
 
         # this code will be updated when the format is changed.
         translated = ''.join([d[0] if d[0] else '' for d in data[0]])
@@ -251,7 +251,8 @@ class Translator:
         # actual source language that will be recognized by Google Translator when the
         # src passed is equal to auto.
         try:
-            src = self.translate_to_detect(text).src
+            temp_src = await self.translate_to_detect(text)
+            src = temp_src.src#data[2]
         except Exception:  # pragma: nocover
             pass
 
@@ -278,7 +279,7 @@ class Translator:
 
         return result
 
-    def translate_to_detect(self, text: str, dest='en', src='auto'):
+    async def translate_to_detect(self, text: str, dest='en', src='auto'):
         dest = dest.lower().split('_', 1)[0]
         src = src.lower().split('_', 1)[0]
 
@@ -299,7 +300,7 @@ class Translator:
                 raise ValueError('invalid destination language')
 
         origin = text
-        data, response = self._translate_to_detect(text, dest, src)
+        data, response = await self._translate_to_detect(text, dest, src)
 
         token_found = False
         square_bracket_counts = [0, 0]
@@ -369,12 +370,12 @@ class Translator:
                             response=response)
         return result
 
-    def detect(self, text: str):
-        translated = self.translate_to_detect(text, src='auto', dest='en')
+    async def detect(self, text: str):
+        translated = await self.translate_to_detect(text, src='auto', dest='en')
         result = Detected(lang=translated.src, confidence=translated.extra_data.get('confidence', None), response=translated._response)
         return result
 
-    def detect_legacy(self, text, **kwargs):
+    async def detect_legacy(self, text, **kwargs):
         """Detect language of the input text
 
         :param text: The source text(s) whose language you want to identify.
@@ -408,11 +409,11 @@ class Translator:
         if isinstance(text, list):
             result = []
             for item in text:
-                lang = self.detect(item)
+                lang = await self.detect_legacy(item)
                 result.append(lang)
             return result
 
-        data, response = self._translate(text, 'en', 'auto', kwargs)
+        data, response = await self._translate(text, 'en', 'auto', kwargs)
 
         # actual source language that will be recognized by Google Translator when the
         # src passed is equal to auto.

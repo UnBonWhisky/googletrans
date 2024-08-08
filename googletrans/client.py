@@ -9,7 +9,7 @@ import typing
 import re
 import json
 
-import httpcore
+import httpx_socks
 import httpx
 from httpx import Timeout
 
@@ -48,22 +48,24 @@ class Translator:
     :param timeout: Definition of timeout for httpx library.
                     Will be used for every request.
     :type timeout: number or a double of numbers
-    :param proxies: proxies configuration.
-                    Dictionary mapping protocol or protocol and host to the URL of the proxy
-                    For example ``{'http': 'foo.bar:3128', 'http://host.name': 'foo.bar:4012'}``
+    :param proxy:  proxies configuration.
+                    List mapping socks5 and host to the URL of the proxy
+                    For example ``['socks5://foo.bar:1080', 'socks5://bar.foo:1080']``
     :param raise_exception: if `True` then raise exception if smth will go wrong
     :type raise_exception: boolean
     """
 
     def __init__(self, service_urls=DEFAULT_CLIENT_SERVICE_URLS, user_agent=DEFAULT_USER_AGENT,
                  raise_exception=DEFAULT_RAISE_EXCEPTION,
-                 proxies: typing.Dict[str, httpcore.SyncHTTPTransport] = None,
+                 proxy: list = None,
                  timeout: Timeout = None,
                  http2=True):
 
-        self.client = httpx.AsyncClient(http2=http2)
-        if proxies is not None:  # pragma: nocover
-            self.client.proxies = proxies
+        if proxy is not None :
+            transport = httpx_socks.AsyncProxyTransport.from_url(random.choice(proxy))
+        else:
+            transport = None
+        self.client = httpx.AsyncClient(http2=http2, transport=transport)
 
         self.client.headers.update({
             'User-Agent': user_agent,

@@ -42,7 +42,7 @@ def install():
         license='MIT',
         author='SuHun Han',
         author_email='ssut' '@' 'ssut.me',
-        url='https://github.com/ssut/py-googletrans',
+        url='https://github.com/UnBonWhisky/googletrans',
         classifiers=['Development Status :: 5 - Production/Stable',
                      'Intended Audience :: Education',
                      'Intended Audience :: End Users/Desktop',
@@ -58,7 +58,9 @@ def install():
         packages=find_packages(exclude=['docs', 'tests']),
         keywords='google translate translator',
         install_requires=[
-            'httpx==0.13.3',
+            'httpx',
+            'httpx-socks',
+            'httpx-socks[asyncio]',
         ],
         python_requires= '>=3.6',
         tests_require=[

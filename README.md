@@ -6,11 +6,16 @@ In fact, the v3.1.0a0 had problems to detect some languages like chinese traditi
 
 > **Note**: I have no intention to add features or to maintain this project. This is a temporary solution to a temporary a problem, hopefully. If you have ideas to maintain this project (like allow more recent versions of httpx), your help is welcome
 
+### Changes about original one :
+
+- This version is running asynchronously, so the translate functions are all using await  
+- This version supports socks and https proxies (added http-socks as requirements in the setup.py file)
+
 ## Installation
 
 ### PyPI
 
-Actually I have nopt posted this project on pypi. The better way is to use Repository, or to install googletrans==3.1.0a0 and change the files by the ones in `googletrans` folder
+Actually I have not posted this project on pypi. The better way is to use Repository, or to install googletrans==3.1.0a0 and change the files by the ones in `googletrans` folder
 
 ### Repository
 

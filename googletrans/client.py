@@ -70,7 +70,7 @@ class Translator:
             else :
                 transport = None
                 
-            self.client = httpx.AsyncClient(http2=http2, transport=transport, proxy=proxy)
+        self.client = httpx.AsyncClient(http2=http2, transport=transport, proxy=proxy)
 
         self.client.headers.update({
             'User-Agent': user_agent,

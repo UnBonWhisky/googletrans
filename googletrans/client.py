@@ -286,7 +286,6 @@ class Translator:
         return result
 
     async def translate_to_detect(self, text: str, dest='en', src='auto'):
-        dest = dest.lower().split('_', 1)[0]
         src = src.lower().split('_', 1)[0]
 
         if src != 'auto' and src not in LANGUAGES:

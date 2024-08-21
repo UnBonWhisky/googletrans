@@ -221,7 +221,6 @@ class Translator:
             jumps over  ->  이상 점프
             the lazy dog  ->  게으른 개
         """
-        dest = dest.lower().split('_', 1)[0]
         src = src.lower().split('_', 1)[0]
 
         if src != 'auto' and src not in LANGUAGES:

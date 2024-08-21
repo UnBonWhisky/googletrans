@@ -1,25 +1,27 @@
-# googletrans-py
+# googletrans-py-async
 
-This is a fork of the [googletrans](https://github.com/ssut/py-googletrans) that fix issues about detecting language and translations.
+This is an asynchronous fork of the [googletrans](https://github.com/ssut/py-googletrans) that fix issues about detecting language and translations.
 
 In fact, the v3.1.0a0 had problems to detect some languages like chinese traditional, and the 4.0.0rc1 had problems to translate small words like [this issue](https://github.com/ssut/py-googletrans/issues/394)
 
-> **Note**: I have no intention to add features or to maintain this project. This is a temporary solution to a temporary a problem, hopefully. If you have ideas to maintain this project (like allow more recent versions of httpx), your help is welcome
+> **Note**: I have no intention to add features or to maintain this project except for a personal use. This is a temporary solution to a temporary a problem. If you have ideas to maintain this project, your help is welcome
 
 ### Changes about original one :
 
-- This version is running asynchronously, so the translate functions are all using await  
-- This version supports socks and https proxies (added http-socks as requirements in the setup.py file)
+- This version is running asynchronously, so the translate functions are all using await
+- This version supports socks and https proxies
+- This version accepts 242 languages, not 107 like the original one.
+- The shell commands does not work anymore because of the asynchronous method
 
 ## Installation
 
 ### PyPI
 
-Actually I have not posted this project on pypi. The better way is to use Repository, or to install googletrans==3.1.0a0 and change the files by the ones in `googletrans` folder
+Actually I have not posted this project on pypi. The better way is to use the git install from pip
 
 ### Repository
 
-You can also install the project directly from this repository.
+You can install the project directly from this repository.
 
 ```shell
 pip install git+https://github.com/UnBonWhisky/googletrans.git
@@ -46,12 +48,14 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-It may have issues when using `trad.detect()` (like `json.decoder.JSONDecodeError` or `TypeError`, so I recommand to use it like this :
+It may have issues when using `trad.detect()` or `trad.translate()` (like `json.decoder.JSONDecodeError` or `TypeError`, so I recommand to use it like this :
 ```py
 try :
-    translation = await trad.detect("Un texte français")
+    translation = await trad.translate("Here is my code example", dest="fr")
+    detection = await trad.detect("Un texte français")
 except :
-    translation = await trad.detect_legacy("Un texte français")
+    translation = await trad.translate_to_detect("Here is my code example", dest="fr")
+    detection = await trad.detect_legacy("Un texte français")
 ```
 
 ## Credits

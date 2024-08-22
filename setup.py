@@ -42,6 +42,7 @@ def install():
         license='MIT',
         author='SuHun Han',
         author_email='ssut' '@' 'ssut.me',
+        maintainer='UnBonWhisky',
         url='https://github.com/UnBonWhisky/googletrans',
         classifiers=['Development Status :: 5 - Production/Stable',
                      'Intended Audience :: Education',
@@ -54,7 +55,11 @@ def install():
                      'Programming Language :: Python',
                      'Programming Language :: Python :: 3.6',
                      'Programming Language :: Python :: 3.7',
-                     'Programming Language :: Python :: 3.8'],
+                     'Programming Language :: Python :: 3.8'
+                     'Programming Language :: Python :: 3.9',
+                     'Programming Language :: Python :: 3.10',
+                     'Programming Language :: Python :: 3.11'
+                     'Programming Language :: Python :: 3.12'],
         packages=find_packages(exclude=['docs', 'tests']),
         keywords='google translate translator',
         install_requires=[

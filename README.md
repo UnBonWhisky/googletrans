@@ -11,7 +11,6 @@ In fact, the v3.1.0a0 had problems to detect some languages like chinese traditi
 - This version is running asynchronously, so the translate functions are all using await
 - This version supports socks and https proxies
 - This version accepts 242 languages, not 107 like the original one.
-- The shell commands does not work anymore because of the asynchronous method
 
 ## Installation
 

@@ -250,6 +250,7 @@ LANGUAGES = {
     'fa' : 'persian',
     'pl' : 'polish',
     'pt-PT' : 'portuguese',
+    'pt' : 'portuguese (brazil)',
     'pa' : 'punjabi',
     'pa-Arab' : 'punjabi (shahmukhi)',
     'qu' : 'quechua',

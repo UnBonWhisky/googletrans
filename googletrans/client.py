@@ -331,7 +331,7 @@ class Translator:
 
         if response.status_code == 302:
             response = await self.client.request(response.request.method, response.request.url, content=response.request.content, headers=response.request.headers, follow_redirects=True)
-            if "Our systems have detected unusual traffic from your computer network." in resp.text:
+            if "Our systems have detected unusual traffic from your computer network." in response.text:
                 raise RateLimitError
                 
         data = json.loads(resp)

@@ -5,3 +5,4 @@ __version__ = '3.1.0-alpha'
 
 from googletrans.client import Translator
 from googletrans.constants import LANGCODES, LANGUAGES, FLAG_CODES, LANGKEYS, LANGNAMES  # noqa
+from googletrans.models import RateLimitError

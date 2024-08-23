@@ -127,3 +127,7 @@ class Detected(Base):
         return u'Detected(lang={lang}, confidence={confidence})'.format(
             lang=self.lang, confidence=self.confidence)
 
+class RateLimitError(Exception):
+    def __init__(self, message="The connection to the server has been rate-limited."):
+        self.message = message
+        super().__init__(self.message)

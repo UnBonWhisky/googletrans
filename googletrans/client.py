@@ -20,7 +20,7 @@ from googletrans.constants import (
     DEFAULT_USER_AGENT, LANGCODES, LANGUAGES, SPECIAL_CASES,
     DEFAULT_RAISE_EXCEPTION, DUMMY_DATA
 )
-from googletrans.models import Translated, Detected, TranslatedPart, Translate_to_Detect
+from googletrans.models import Translated, Detected, TranslatedPart, Translate_to_Detect, RateLimitError
 
 EXCLUDES = ('en', 'ca', 'fr')
 
@@ -329,6 +329,11 @@ class Translator:
             if square_bracket_counts[0] == square_bracket_counts[1]:
                 break
 
+        if response.status_code == 302:
+            response = await self.client.request(response.request.method, response.request.url, content=response.request.content, headers=response.request.headers, follow_redirects=True)
+            if "Our systems have detected unusual traffic from your computer network." in resp.text:
+                raise RateLimitError
+                
         data = json.loads(resp)
         parsed = json.loads(data[0][2])
         # not sure

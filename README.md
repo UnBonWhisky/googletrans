@@ -57,6 +57,10 @@ except :
     detection = await trad.detect_legacy("Un texte français")
 ```
 
+## FYI
+A new Exception type have been added to the library, named RateLimitError.  
+It raises when google redirects you to the page with "Our systems have detected unusual traffic".
+
 ## Credits
 
 Original Author - [Suhun Han](https://github.com/ssut)

@@ -299,6 +299,7 @@ LANGUAGES = {
     'tiv' : 'tiv',
     'tpi' : 'tok pisin',
     'to' : 'tongan',
+    'lua' : 'tshiluba',
     'ts' : 'tsonga',
     'tn' : 'tswana',
     'tcy' : 'tulu',

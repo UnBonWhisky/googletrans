@@ -174,6 +174,8 @@ LANGUAGES = {
     'ig' : 'igbo',
     'ilo' : 'ilocano',
     'id' : 'indonesian',
+    'iu' : 'inuktitut',
+    'iu-Latn' : 'inuktitut (latin)',
     'ga' : 'irish',
     'it' : 'italian',
     'jam' : 'jamaican patois',

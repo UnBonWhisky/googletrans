@@ -110,7 +110,7 @@ class TokenAcquirer:
 
             self.tkk = result
 
-    def _lazy(self, value):
+    async def _lazy(self, value):
         """like lazy evaluation, this method returns a lambda function that
         returns value given.
         We won't be needing this because this seems to have been built for
@@ -128,19 +128,19 @@ class TokenAcquirer:
         """
         return lambda: value
 
-    def _xr(self, a, b):
+    async def _xr(self, a, b):
         size_b = len(b)
         c = 0
         while c < size_b - 2:
             d = b[c + 2]
             d = ord(d[0]) - 87 if 'a' <= d else int(d)
-            d = rshift(a, d) if '+' == b[c + 1] else a << d
+            d = await rshift(a, d) if '+' == b[c + 1] else a << d
             a = a + d & 4294967295 if '+' == b[c] else a ^ d
 
             c += 3
         return a
 
-    def acquire(self, text):
+    async def acquire(self, text):
         a = []
         # Convert text to ints
         for i in text:
@@ -187,8 +187,8 @@ class TokenAcquirer:
         a = b
         for i, value in enumerate(e):
             a += value
-            a = self._xr(a, '+-a^+6')
-        a = self._xr(a, '+-3^+b+-f')
+            a = await self._xr(a, '+-a^+6')
+        a = await self._xr(a, '+-3^+b+-f')
         a ^= int(d[1]) if len(d) > 1 else 0
         if a < 0:  # pragma: nocover
             a = (a & 2147483647) + 2147483648
@@ -198,5 +198,5 @@ class TokenAcquirer:
 
     async def do(self, text):
         await self._update()
-        tk = self.acquire(text)
+        tk = await self.acquire(text)
         return tk

@@ -101,7 +101,7 @@ class Translator:
         self.raise_exception = raise_exception
     
     @staticmethod
-    def _build_rpc_request(text: str, dest: str, src: str):
+    async def _build_rpc_request(text: str, dest: str, src: str):
         return json.dumps([[
             [
                 RPC_ID,
@@ -111,15 +111,16 @@ class Translator:
             ],
         ]], separators=(',', ':'))
 
-    def _pick_service_url(self):
+    async def _pick_service_url(self):
         if len(self.service_urls) == 1:
             return self.service_urls[0]
         return random.choice(self.service_urls)
 
     async def _translate_to_detect(self, text: str, dest: str, src: str):
-        url = urls.TRANSLATE_RPC.format(host=self._pick_service_url().replace('googleapis', 'google'))
+        host = await self._pick_service_url()
+        url = urls.TRANSLATE_RPC.format(host=host.replace('googleapis', 'google'))
         data = {
-            'f.req': self._build_rpc_request(text, dest, src),
+            'f.req': await self._build_rpc_request(text, dest, src),
         }
         params = {
             'rpcids': RPC_ID,
@@ -142,14 +143,14 @@ class Translator:
         if self.client_type == 'webapp':
             token = await self.token_acquirer.do(text)
 
-        params = utils.build_params(client=self.client_type, query=text, src=src, dest=dest,
+        params = await utils.build_params(client=self.client_type, query=text, src=src, dest=dest,
                                     token=token, override=override)
 
-        url = urls.TRANSLATE.format(host=self._pick_service_url())
+        url = urls.TRANSLATE.format(host=await self._pick_service_url())
         r = await self.client.get(url, params=params)
 
         if r.status_code == 200:
-            data = utils.format_json(r.text)
+            data = await utils.format_json(r.text)
             return data, r
 
         if self.raise_exception:

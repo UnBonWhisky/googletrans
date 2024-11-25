@@ -3,7 +3,7 @@ import json
 import re
 
 
-def build_params(client,query, src, dest, token, override):
+async def build_params(client,query, src, dest, token, override):
     params = {
         'client': client,
         'sl': src,
@@ -20,13 +20,13 @@ def build_params(client,query, src, dest, token, override):
     }
 
     if override is not None:
-        for key, value in get_items(override):
+        async for key, value in get_items(override):
             params[key] = value
 
     return params
 
 
-def legacy_format_json(original):
+async def legacy_format_json(original):
     # save state
     states = []
     text = original
@@ -59,21 +59,21 @@ def legacy_format_json(original):
     return converted
 
 
-def get_items(dict_object):
+async def get_items(dict_object):
     for key in dict_object:
         yield key, dict_object[key]
 
 
-def format_json(original):
+async def format_json(original):
     try:
         converted = json.loads(original)
     except ValueError:
-        converted = legacy_format_json(original)
+        converted = await legacy_format_json(original)
 
     return converted
 
 
-def rshift(val, n):
+async def rshift(val, n):
     """python port for '>>>'(right shift with padding)
     """
     return (val % 0x100000000) >> n

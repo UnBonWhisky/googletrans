@@ -127,6 +127,7 @@ LANGUAGES = {
     'cv' : 'chuvash',
     'co' : 'corsican',
     'crh' : 'crimean tatar',
+    'crh-Latn': 'crimean tatar (latin)',
     'hr' : 'croatian',
     'cs' : 'czech',
     'da' : 'danish',

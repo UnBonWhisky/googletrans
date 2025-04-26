@@ -268,6 +268,7 @@ LANGUAGES = {
     'sg' : 'sango',
     'sa' : 'sanskrit',
     'sat-Latn' : 'santali',
+    'sat': 'santali (ol chiki)',
     'gd' : 'scots gaelic',
     'nso' : 'sepedi',
     'sr' : 'serbian',

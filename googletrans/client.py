@@ -130,11 +130,16 @@ class Translator:
             'soc-device': 1,
             'rt': 'c',
         }
-        r = await self.client.post(url, params=params, data=data)
+        r = await self.client.post(url, params=params, data=data, follow_redirects=True)
 
         if r.status_code != 200 and self.raise_exception:
             raise Exception('Unexpected status code "{}" from {}'.format(
                 r.status_code, self.service_urls))
+
+        if "Our systems have detected unusual traffic from your computer network." in r.text:
+            print(r.text)
+            print("Our systems have detected unusual traffic from your computer network." in r.text)
+            raise RateLimitError
 
         return r.text, r
 
@@ -260,6 +265,8 @@ class Translator:
         try:
             temp_src = await self.translate_to_detect(text)
             src = temp_src.src#data[2]
+        except RateLimitError:
+            raise
         except Exception:  # pragma: nocover
             pass
 
@@ -272,7 +279,7 @@ class Translator:
         if pron is None:
             try:
                 pron = data[0][1][2]
-            except:  # pragma: nocover
+            except Exception:  # pragma: nocover
                 pass
 
         if dest in EXCLUDES and pron == origin:
@@ -330,11 +337,6 @@ class Translator:
             if square_bracket_counts[0] == square_bracket_counts[1]:
                 break
 
-        if response.status_code == 302:
-            response = await self.client.request(response.request.method, response.request.url, content=response.request.content, headers=response.request.headers, follow_redirects=True)
-            if "Our systems have detected unusual traffic from your computer network." in response.text:
-                raise RateLimitError
-                
         data = json.loads(resp)
         parsed = json.loads(data[0][2])
         # not sure
@@ -345,12 +347,12 @@ class Translator:
         if src == 'auto':
             try:
                 src = parsed[2]
-            except:
+            except Exception:
                 pass
         if src == 'auto':
             try:
                 src = parsed[0][2]
-            except:
+            except Exception:
                 pass
 
         # currently not available
@@ -359,13 +361,13 @@ class Translator:
         origin_pronunciation = None
         try:
             origin_pronunciation = parsed[0][0]
-        except:
+        except Exception:
             pass
 
         pronunciation = None
         try:
             pronunciation = parsed[1][0][0][1]
-        except:
+        except Exception:
             pass
 
         extra_data = {

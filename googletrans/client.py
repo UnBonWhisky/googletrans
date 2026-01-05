@@ -62,6 +62,7 @@ class Translator:
                  http2=True):
 
         transport = None
+        self.http2 = http2
         
         if proxy is not None :
             if proxy.startswith('socks5'):
@@ -70,7 +71,7 @@ class Translator:
             else :
                 transport = None
                 
-        self.client = httpx.AsyncClient(http2=http2, transport=transport, proxy=proxy)
+        self.client = httpx.AsyncClient(http2=self.http2, transport=transport, proxy=proxy)
 
         self.client.headers.update({
             'User-Agent': user_agent,
@@ -87,7 +88,7 @@ class Translator:
                 client=self.client, host=self.service_urls[0])
 
             #if we have a service url pointing to client api we force the use of it as defaut client
-            for t in enumerate(service_urls):
+            for _ in enumerate(service_urls):
                 api_type = re.search('googleapis',service_urls[0])
                 if (api_type):
                     self.service_urls = ['translate.googleapis.com']
@@ -185,6 +186,29 @@ class Translator:
                 index < len(data) and data[index]) else None
 
         return extra
+    
+    async def change_proxy(self, proxy: str = None):
+        """Change proxy during runtime
+
+        :param proxy:  proxies configuration.
+                        List mapping socks5 and http(s) host to the URL of the proxy
+                        For example ``socks5://foo.bar:1080`` or ``https://foo.bar:8080``
+        """
+        await self.client.aclose()
+        transport = None
+        
+        if proxy is not None :
+            if proxy.startswith('socks5'):
+                transport = httpx_socks.AsyncProxyTransport.from_url(proxy)
+                proxy = None
+            else :
+                transport = None
+                
+        self.client = httpx.AsyncClient(http2=self.http2, transport=transport, proxy=proxy)
+        self.token_acquirer = TokenAcquirer(
+            client=self.client,
+            host=self.service_urls[0]
+        )
 
     async def translate(self, text, dest='en', src='auto', **kwargs):
         """Translate text from source language to destination language

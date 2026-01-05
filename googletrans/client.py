@@ -137,8 +137,6 @@ class Translator:
                 r.status_code, self.service_urls))
 
         if "Our systems have detected unusual traffic from your computer network." in r.text:
-            print(r.text)
-            print("Our systems have detected unusual traffic from your computer network." in r.text)
             raise RateLimitError
 
         return r.text, r

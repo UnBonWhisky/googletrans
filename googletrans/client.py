@@ -5,7 +5,6 @@ A Translation module.
 You can translate text using this module.
 """
 import random
-import typing
 import re
 import json
 
@@ -59,10 +58,12 @@ class Translator:
                  raise_exception=DEFAULT_RAISE_EXCEPTION,
                  proxy: str = None,
                  timeout: Timeout = None,
-                 http2=True):
+                 limit: httpx.Limits = httpx.Limits(max_keepalive_connections=None, max_connections=None),
+                 http2: bool = True):
 
         transport = None
         self.http2 = http2
+        self.limit = limit
         
         if proxy is not None :
             if proxy.startswith('socks5'):
@@ -70,8 +71,13 @@ class Translator:
                 proxy = None
             else :
                 transport = None
-                
-        self.client = httpx.AsyncClient(http2=self.http2, transport=transport, proxy=proxy)
+        
+        self.client = httpx.AsyncClient(
+            http2=self.http2,
+            transport=transport,
+            proxy=proxy,
+            limits=self.limit
+        )
 
         self.client.headers.update({
             'User-Agent': user_agent,
@@ -203,8 +209,13 @@ class Translator:
                 proxy = None
             else :
                 transport = None
-                
-        self.client = httpx.AsyncClient(http2=self.http2, transport=transport, proxy=proxy)
+            
+        self.client = httpx.AsyncClient(
+            http2=self.http2,
+            transport=transport,
+            proxy=proxy,
+            limits=self.limit
+        )
         self.token_acquirer = TokenAcquirer(
             client=self.client,
             host=self.service_urls[0]

@@ -63,10 +63,12 @@ class Translator:
         connector = None
         self.connector_limit = connector_limit
         self.proxy = None
+        self._use_proxy_connector = False
         
         if proxy is not None:
             if proxy.startswith('socks5') or proxy.startswith('socks4'):
                 connector = ProxyConnector.from_url(proxy)
+                self._use_proxy_connector = True
             else:
                 # HTTP/HTTPS proxy
                 self.proxy = proxy
@@ -77,6 +79,7 @@ class Translator:
         self.connector = connector
         self.timeout = timeout if timeout is not None else aiohttp.ClientTimeout(total=30)
         self.user_agent = user_agent
+        self._proxy_url = proxy  # Store for recreating proxy connector if needed
         
         # Session will be created on first use
         self._session = None
@@ -102,6 +105,14 @@ class Translator:
     
     async def _get_session(self):
         """Get or create aiohttp session"""
+        # Check if connector needs to be recreated
+        if self.connector is None or self.connector.closed:
+            if self._use_proxy_connector and self._proxy_url:
+                self.connector = ProxyConnector.from_url(self._proxy_url)
+            else:
+                self.connector = aiohttp.TCPConnector(limit=self.connector_limit)
+        
+        # Check if session needs to be recreated
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession(
                 connector=self.connector,

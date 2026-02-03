@@ -74,6 +74,7 @@ class Translator:
         if connector is None:
             connector = aiohttp.TCPConnector(limit=self.connector_limit)
         
+        self.connector = connector
         self.timeout = timeout if timeout is not None else aiohttp.ClientTimeout(total=30)
         self.user_agent = user_agent
         
@@ -98,13 +99,13 @@ class Translator:
             self.client_type = 'webapp'
             self.token_acquirer = None  # Will be created when session is initialized
         self.raise_exception = raise_exception
-        self.connector = connector
     
     async def _get_session(self):
         """Get or create aiohttp session"""
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession(
                 connector=self.connector,
+                connector_owner=False,  # Don't close connector when session closes
                 timeout=self.timeout,
                 headers={'User-Agent': self.user_agent}
             )
@@ -118,25 +119,9 @@ class Translator:
         """Close the aiohttp session and connector"""
         if self._session and not self._session.closed:
             await self._session.close()
-            # Give the connector time to close properly
-            await asyncio.sleep(0.25)
-    
-    def __del__(self):
-        """Cleanup when object is destroyed"""
-        if self._session and not self._session.closed:
-            try:
-                # Try to close the session if event loop is still running
-                try:
-                    loop = asyncio.get_running_loop()
-                    loop.create_task(self.close())
-                except RuntimeError:
-                    # No event loop running, try to run cleanup
-                    try:
-                        asyncio.run(self.close())
-                    except Exception:
-                        pass
-            except Exception:
-                pass
+        # Close the connector if it's still open
+        if self.connector and not self.connector.closed:
+            await self.connector.close()
     
     async def __aenter__(self):
         return self

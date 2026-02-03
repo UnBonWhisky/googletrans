@@ -116,7 +116,7 @@ class Translator:
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession(
                 connector=self.connector,
-                connector_owner=False,  # Don't close connector when session closes
+                connector_owner=True,
                 timeout=self.timeout,
                 headers={'User-Agent': self.user_agent}
             )
@@ -126,13 +126,46 @@ class Translator:
                     session=self._session, host=self.service_urls[0])
         return self._session
     
+    def __del__(self):
+        """Cleanup when object is garbage collected to prevent unclosed warnings"""
+        try:
+            # Close session's connector synchronously
+            if hasattr(self, '_session') and self._session is not None:
+                if hasattr(self._session, '_connector') and self._session._connector is not None:
+                    if not self._session._connector.closed:
+                        try:
+                            self._session._connector._close()
+                        except Exception :
+                            pass
+            
+            # Close standalone connector reference
+            if hasattr(self, 'connector') and self.connector is not None:
+                if not self.connector.closed:
+                    try:
+                        self.connector._close()
+                    except Exception :
+                        pass
+        except Exception :
+            pass
+    
     async def close(self):
         """Close the aiohttp session and connector"""
-        if self._session and not self._session.closed:
-            await self._session.close()
-        # Close the connector if it's still open
-        if self.connector and not self.connector.closed:
-            await self.connector.close()
+        try:
+            if self._session is not None and not self._session.closed:
+                try:
+                    await self._session.close()
+                except Exception:
+                    pass
+        finally:
+            self._session = None
+            try:
+                if self.connector is not None and not self.connector.closed:
+                    try:
+                        await self.connector.close()
+                    except Exception:
+                        pass
+            finally:
+                self.connector = None
     
     async def __aenter__(self):
         return self

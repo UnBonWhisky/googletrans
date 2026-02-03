@@ -4,13 +4,13 @@ A Translation module.
 
 You can translate text using this module.
 """
+import asyncio
 import random
 import re
 import json
 
-import httpx_socks
-import httpx
-from httpx import Timeout
+import aiohttp
+from aiohttp_socks import ProxyConnector
 
 from googletrans import urls, utils
 from googletrans.gtoken import TokenAcquirer
@@ -57,41 +57,34 @@ class Translator:
     def __init__(self, service_urls=DEFAULT_CLIENT_SERVICE_URLS, user_agent=DEFAULT_USER_AGENT,
                  raise_exception=DEFAULT_RAISE_EXCEPTION,
                  proxy: str = None,
-                 timeout: Timeout = None,
-                 limit: httpx.Limits = httpx.Limits(max_keepalive_connections=None, max_connections=None),
-                 http2: bool = True):
+                 timeout: aiohttp.ClientTimeout = None,
+                 connector_limit: int = 100):
 
-        transport = None
-        self.http2 = http2
-        self.limit = limit
+        connector = None
+        self.connector_limit = connector_limit
+        self.proxy = None
         
-        if proxy is not None :
-            if proxy.startswith('socks5'):
-                transport = httpx_socks.AsyncProxyTransport.from_url(proxy)
-                proxy = None
-            else :
-                transport = None
+        if proxy is not None:
+            if proxy.startswith('socks5') or proxy.startswith('socks4'):
+                connector = ProxyConnector.from_url(proxy)
+            else:
+                # HTTP/HTTPS proxy
+                self.proxy = proxy
         
-        self.client = httpx.AsyncClient(
-            http2=self.http2,
-            transport=transport,
-            proxy=proxy,
-            limits=self.limit
-        )
-
-        self.client.headers.update({
-            'User-Agent': user_agent,
-        })
-
-        if timeout is not None:
-            self.client.timeout = timeout
+        if connector is None:
+            connector = aiohttp.TCPConnector(limit=self.connector_limit)
+        
+        self.timeout = timeout if timeout is not None else aiohttp.ClientTimeout(total=30)
+        self.user_agent = user_agent
+        
+        # Session will be created on first use
+        self._session = None
 
         if (service_urls is not None):
             #default way of working: use the defined values from user app
             self.service_urls = service_urls
             self.client_type = 'webapp'
-            self.token_acquirer = TokenAcquirer(
-                client=self.client, host=self.service_urls[0])
+            self.token_acquirer = None  # Will be created when session is initialized
 
             #if we have a service url pointing to client api we force the use of it as defaut client
             for _ in enumerate(service_urls):
@@ -103,9 +96,53 @@ class Translator:
         else:
             self.service_urls = ['translate.google.com']
             self.client_type = 'webapp'
-            self.token_acquirer = TokenAcquirer(
-                client=self.client, host=self.service_urls[0])
+            self.token_acquirer = None  # Will be created when session is initialized
         self.raise_exception = raise_exception
+        self.connector = connector
+    
+    async def _get_session(self):
+        """Get or create aiohttp session"""
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession(
+                connector=self.connector,
+                timeout=self.timeout,
+                headers={'User-Agent': self.user_agent}
+            )
+            # Initialize token acquirer with the session
+            if self.client_type == 'webapp' and self.token_acquirer is None:
+                self.token_acquirer = TokenAcquirer(
+                    session=self._session, host=self.service_urls[0])
+        return self._session
+    
+    async def close(self):
+        """Close the aiohttp session and connector"""
+        if self._session and not self._session.closed:
+            await self._session.close()
+            # Give the connector time to close properly
+            await asyncio.sleep(0.25)
+    
+    def __del__(self):
+        """Cleanup when object is destroyed"""
+        if self._session and not self._session.closed:
+            try:
+                # Try to close the session if event loop is still running
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(self.close())
+                except RuntimeError:
+                    # No event loop running, try to run cleanup
+                    try:
+                        asyncio.run(self.close())
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+    
+    async def __aenter__(self):
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.close()
     
     @staticmethod
     async def _build_rpc_request(text: str, dest: str, src: str):
@@ -124,6 +161,7 @@ class Translator:
         return random.choice(self.service_urls)
 
     async def _translate_to_detect(self, text: str, dest: str, src: str):
+        session = await self._get_session()
         host = await self._pick_service_url()
         url = urls.TRANSLATE_RPC.format(host=host.replace('googleapis', 'google'))
         data = {
@@ -137,18 +175,22 @@ class Translator:
             'soc-device': 1,
             'rt': 'c',
         }
-        r = await self.client.post(url, params=params, data=data, follow_redirects=True)
+        
+        async with session.post(url, params=params, data=data, proxy=self.proxy, allow_redirects=True) as r:
+            status = r.status
+            text = await r.text()
+            
+            if status != 200 and self.raise_exception:
+                raise Exception('Unexpected status code "{}" from {}'.format(
+                    status, self.service_urls))
 
-        if r.status_code != 200 and self.raise_exception:
-            raise Exception('Unexpected status code "{}" from {}'.format(
-                r.status_code, self.service_urls))
+            if "Our systems have detected unusual traffic from your computer network." in text:
+                raise RateLimitError
 
-        if "Our systems have detected unusual traffic from your computer network." in r.text:
-            raise RateLimitError
-
-        return r.text, r
+            return text, r
 
     async def _translate(self, text, dest, src, override):
+        session = await self._get_session()
         token = '' #dummy default value here as it is not used by api client
         if self.client_type == 'webapp':
             token = await self.token_acquirer.do(text)
@@ -157,18 +199,21 @@ class Translator:
                                     token=token, override=override)
 
         url = urls.TRANSLATE.format(host=await self._pick_service_url())
-        r = await self.client.get(url, params=params)
+        
+        async with session.get(url, params=params, proxy=self.proxy) as r:
+            status = r.status
+            text_response = await r.text()
+            
+            if status == 200:
+                data = await utils.format_json(text_response)
+                return data, r
 
-        if r.status_code == 200:
-            data = await utils.format_json(r.text)
-            return data, r
+            if self.raise_exception:
+                raise Exception('Unexpected status code "{}" from {}'.format(
+                    status, self.service_urls))
 
-        if self.raise_exception:
-            raise Exception('Unexpected status code "{}" from {}'.format(
-                r.status_code, self.service_urls))
-
-        DUMMY_DATA[0][0][0] = text
-        return DUMMY_DATA, r
+            DUMMY_DATA[0][0][0] = text
+            return DUMMY_DATA, r
 
     def _parse_extra_data(self, data):
         response_parts_name_mapping = {
@@ -200,26 +245,27 @@ class Translator:
                         List mapping socks5 and http(s) host to the URL of the proxy
                         For example ``socks5://foo.bar:1080`` or ``https://foo.bar:8080``
         """
-        await self.client.aclose()
-        transport = None
+        # Close existing session
+        await self.close()
         
-        if proxy is not None :
-            if proxy.startswith('socks5'):
-                transport = httpx_socks.AsyncProxyTransport.from_url(proxy)
-                proxy = None
-            else :
-                transport = None
-            
-        self.client = httpx.AsyncClient(
-            http2=self.http2,
-            transport=transport,
-            proxy=proxy,
-            limits=self.limit
-        )
-        self.token_acquirer = TokenAcquirer(
-            client=self.client,
-            host=self.service_urls[0]
-        )
+        connector = None
+        self.proxy = None
+        
+        if proxy is not None:
+            if proxy.startswith('socks5') or proxy.startswith('socks4'):
+                connector = ProxyConnector.from_url(proxy)
+            else:
+                # HTTP/HTTPS proxy
+                self.proxy = proxy
+        
+        if connector is None:
+            connector = aiohttp.TCPConnector(limit=self.connector_limit)
+        
+        self.connector = connector
+        
+        # Reset session (will be recreated on next request)
+        self._session = None
+        self.token_acquirer = None
 
     async def translate(self, text, dest='en', src='auto', **kwargs):
         """Translate text from source language to destination language

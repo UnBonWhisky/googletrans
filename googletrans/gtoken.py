@@ -4,7 +4,7 @@ import math
 import re
 import time
 
-import httpx
+import aiohttp
 
 from googletrans.utils import rshift
 
@@ -38,8 +38,8 @@ class TokenAcquirer:
     RE_TKK = re.compile(r'tkk:\'(.+?)\'', re.DOTALL)
     RE_RAWTKK = re.compile(r'tkk:\'(.+?)\'', re.DOTALL)
 
-    def __init__(self, client: httpx.AsyncClient, tkk='0', host='translate.google.com'):
-        self.client = client
+    def __init__(self, session: aiohttp.ClientSession, tkk='0', host='translate.google.com'):
+        self.session = session
         self.tkk = tkk
         self.host = host if 'http' in host else 'https://' + host
 
@@ -51,16 +51,17 @@ class TokenAcquirer:
         if self.tkk and int(self.tkk.split('.')[0]) == now:
             return
 
-        r = await self.client.get(self.host)
+        async with self.session.get(self.host) as r:
+            text = await r.text()
 
-        raw_tkk = self.RE_TKK.search(r.text)
+        raw_tkk = self.RE_TKK.search(text)
         if raw_tkk:
             self.tkk = raw_tkk.group(1)
             return
 
         try:
             # this will be the same as python code after stripping out a reserved word 'var'
-            code = self.RE_TKK.search(r.text).group(1).replace('var ', '')
+            code = self.RE_TKK.search(text).group(1).replace('var ', '')
             # unescape special ascii characters such like a \x3d(=)
             code = code.encode().decode('unicode-escape')
             print(code)

@@ -63,16 +63,19 @@ def install():
         packages=find_packages(exclude=['docs', 'tests']),
         keywords='google translate translator',
         install_requires=[
-            'httpx',
-            'httpx-socks',
-            'httpx-socks[asyncio]',
+            'aiohttp>=3.8.0',
+            'aiohttp-socks',
         ],
         python_requires= '>=3.6',
         tests_require=[
             'pytest',
             'coveralls',
         ],
-        scripts=['translate']
+        entry_points={
+            'console_scripts': [
+                'translate=googletrans.translate:main',
+            ],
+        }
     )
 
 

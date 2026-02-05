@@ -4,7 +4,7 @@ A Translation module.
 
 You can translate text using this module.
 """
-import asyncio
+import aiorwlock
 import random
 import re
 import json
@@ -65,6 +65,8 @@ class Translator:
         self.proxy = None
         self._use_proxy_connector = False
         
+        self.rwlock = aiorwlock.RWLock(fast=True)
+        
         if proxy is not None:
             if proxy.startswith('socks5') or proxy.startswith('socks4'):
                 connector = ProxyConnector.from_url(proxy)
@@ -105,26 +107,27 @@ class Translator:
     
     async def _get_session(self):
         """Get or create aiohttp session"""
-        # Check if connector needs to be recreated
-        if self.connector is None or self.connector.closed:
-            if self._use_proxy_connector and self._proxy_url:
-                self.connector = ProxyConnector.from_url(self._proxy_url)
-            else:
-                self.connector = aiohttp.TCPConnector(limit=self.connector_limit)
-        
-        # Check if session needs to be recreated
-        if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession(
-                connector=self.connector,
-                connector_owner=True,
-                timeout=self.timeout,
-                headers={'User-Agent': self.user_agent}
-            )
-            # Initialize token acquirer with the session
-            if self.client_type == 'webapp' and self.token_acquirer is None:
-                self.token_acquirer = TokenAcquirer(
-                    session=self._session, host=self.service_urls[0])
-        return self._session
+        async with self.rwlock.reader_lock:
+            # Check if connector needs to be recreated
+            if self.connector is None or self.connector.closed:
+                if self._use_proxy_connector and self._proxy_url:
+                    self.connector = ProxyConnector.from_url(self._proxy_url)
+                else:
+                    self.connector = aiohttp.TCPConnector(limit=self.connector_limit)
+            
+            # Check if session needs to be recreated
+            if self._session is None or self._session.closed:
+                self._session = aiohttp.ClientSession(
+                    connector=self.connector,
+                    connector_owner=True,
+                    timeout=self.timeout,
+                    headers={'User-Agent': self.user_agent}
+                )
+                # Initialize token acquirer with the session
+                if self.client_type == 'webapp' and self.token_acquirer is None:
+                    self.token_acquirer = TokenAcquirer(
+                        session=self._session, host=self.service_urls[0])
+            return self._session
     
     def __del__(self):
         """Cleanup when object is garbage collected to prevent unclosed warnings"""
@@ -274,27 +277,28 @@ class Translator:
                         List mapping socks5 and http(s) host to the URL of the proxy
                         For example ``socks5://foo.bar:1080`` or ``https://foo.bar:8080``
         """
-        # Close existing session
-        await self.close()
-        
-        connector = None
-        self.proxy = None
-        
-        if proxy is not None:
-            if proxy.startswith('socks5') or proxy.startswith('socks4'):
-                connector = ProxyConnector.from_url(proxy)
-            else:
-                # HTTP/HTTPS proxy
-                self.proxy = proxy
-        
-        if connector is None:
-            connector = aiohttp.TCPConnector(limit=self.connector_limit)
-        
-        self.connector = connector
-        
-        # Reset session (will be recreated on next request)
-        self._session = None
-        self.token_acquirer = None
+        async with self.rwlock.writer_lock:
+            # Close existing session
+            await self.close()
+            
+            connector = None
+            self.proxy = None
+            
+            if proxy is not None:
+                if proxy.startswith('socks5') or proxy.startswith('socks4'):
+                    connector = ProxyConnector.from_url(proxy)
+                else:
+                    # HTTP/HTTPS proxy
+                    self.proxy = proxy
+            
+            if connector is None:
+                connector = aiohttp.TCPConnector(limit=self.connector_limit)
+            
+            self.connector = connector
+            
+            # Reset session (will be recreated on next request)
+            self._session = None
+            self.token_acquirer = None
 
     async def translate(self, text, dest='en', src='auto', **kwargs):
         """Translate text from source language to destination language

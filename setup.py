@@ -65,6 +65,7 @@ def install():
         install_requires=[
             'aiohttp>=3.8.0',
             'aiohttp-socks',
+            'aiorwlock>=1.5.0',
         ],
         python_requires= '>=3.6',
         tests_require=[

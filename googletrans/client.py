@@ -12,6 +12,8 @@ import json
 import aiohttp
 from aiohttp_socks import ProxyConnector
 
+from contextlib import asynccontextmanager
+
 from googletrans import urls, utils
 from googletrans.gtoken import TokenAcquirer
 from googletrans.constants import (
@@ -83,8 +85,12 @@ class Translator:
         self.user_agent = user_agent
         self._proxy_url = proxy  # Store for recreating proxy connector if needed
         
-        # Session will be created on first use
-        self._session = None
+        self._session = aiohttp.ClientSession(
+            connector=self.connector,
+            connector_owner=True,
+            timeout=self.timeout,
+            headers={'User-Agent': self.user_agent}
+        )
 
         if (service_urls is not None):
             #default way of working: use the defined values from user app
@@ -103,31 +109,17 @@ class Translator:
             self.service_urls = ['translate.google.com']
             self.client_type = 'webapp'
             self.token_acquirer = None  # Will be created when session is initialized
+            
+        if self.client_type == 'webapp':
+            self.token_acquirer = TokenAcquirer(
+                session=self._session, host=self.service_urls[0])
         self.raise_exception = raise_exception
     
+    @asynccontextmanager
     async def _get_session(self):
         """Get or create aiohttp session"""
         async with self.rwlock.reader_lock:
-            # Check if connector needs to be recreated
-            if self.connector is None or self.connector.closed:
-                if self._use_proxy_connector and self._proxy_url:
-                    self.connector = ProxyConnector.from_url(self._proxy_url)
-                else:
-                    self.connector = aiohttp.TCPConnector(limit=self.connector_limit)
-            
-            # Check if session needs to be recreated
-            if self._session is None or self._session.closed:
-                self._session = aiohttp.ClientSession(
-                    connector=self.connector,
-                    connector_owner=True,
-                    timeout=self.timeout,
-                    headers={'User-Agent': self.user_agent}
-                )
-                # Initialize token acquirer with the session
-                if self.client_type == 'webapp' and self.token_acquirer is None:
-                    self.token_acquirer = TokenAcquirer(
-                        session=self._session, host=self.service_urls[0])
-            return self._session
+            yield self._session
     
     def __del__(self):
         """Cleanup when object is garbage collected to prevent unclosed warnings"""
@@ -153,22 +145,23 @@ class Translator:
     
     async def close(self):
         """Close the aiohttp session and connector"""
-        try:
-            if self._session is not None and not self._session.closed:
-                try:
-                    await self._session.close()
-                except Exception:
-                    pass
-        finally:
-            self._session = None
+        async with self.rwlock.writer_lock:
             try:
-                if self.connector is not None and not self.connector.closed:
+                if self._session is not None and not self._session.closed:
                     try:
-                        await self.connector.close()
+                        await self._session.close()
                     except Exception:
                         pass
             finally:
-                self.connector = None
+                self._session = None
+                try:
+                    if self.connector is not None and not self.connector.closed:
+                        try:
+                            await self.connector.close()
+                        except Exception:
+                            pass
+                finally:
+                    self.connector = None
     
     async def __aenter__(self):
         return self
@@ -193,59 +186,59 @@ class Translator:
         return random.choice(self.service_urls)
 
     async def _translate_to_detect(self, text: str, dest: str, src: str):
-        session = await self._get_session()
-        host = await self._pick_service_url()
-        url = urls.TRANSLATE_RPC.format(host=host.replace('googleapis', 'google'))
-        data = {
-            'f.req': await self._build_rpc_request(text, dest, src),
-        }
-        params = {
-            'rpcids': RPC_ID,
-            'bl': 'boq_translate-webserver_20201207.13_p0',
-            'soc-app': 1,
-            'soc-platform': 1,
-            'soc-device': 1,
-            'rt': 'c',
-        }
-        
-        async with session.post(url, params=params, data=data, proxy=self.proxy, allow_redirects=True) as r:
-            status = r.status
-            text = await r.text()
+        async with self._get_session() as session:
+            host = await self._pick_service_url()
+            url = urls.TRANSLATE_RPC.format(host=host.replace('googleapis', 'google'))
+            data = {
+                'f.req': await self._build_rpc_request(text, dest, src),
+            }
+            params = {
+                'rpcids': RPC_ID,
+                'bl': 'boq_translate-webserver_20201207.13_p0',
+                'soc-app': 1,
+                'soc-platform': 1,
+                'soc-device': 1,
+                'rt': 'c',
+            }
             
-            if status != 200 and self.raise_exception:
-                raise Exception('Unexpected status code "{}" from {}'.format(
-                    status, self.service_urls))
+            async with session.post(url, params=params, data=data, proxy=self.proxy, allow_redirects=True) as r:
+                status = r.status
+                text = await r.text()
+                
+                if status != 200 and self.raise_exception:
+                    raise Exception('Unexpected status code "{}" from {}'.format(
+                        status, self.service_urls))
 
-            if "Our systems have detected unusual traffic from your computer network." in text:
-                raise RateLimitError
+                if "Our systems have detected unusual traffic from your computer network." in text:
+                    raise RateLimitError
 
-            return text, r
+                return text, r
 
     async def _translate(self, text, dest, src, override):
-        session = await self._get_session()
-        token = '' #dummy default value here as it is not used by api client
-        if self.client_type == 'webapp':
-            token = await self.token_acquirer.do(text)
+        async with self._get_session() as session:
+            token = '' #dummy default value here as it is not used by api client
+            if self.client_type == 'webapp':
+                token = await self.token_acquirer.do(text)
 
-        params = await utils.build_params(client=self.client_type, query=text, src=src, dest=dest,
-                                    token=token, override=override)
+            params = await utils.build_params(client=self.client_type, query=text, src=src, dest=dest,
+                                        token=token, override=override)
 
-        url = urls.TRANSLATE.format(host=await self._pick_service_url())
-        
-        async with session.get(url, params=params, proxy=self.proxy) as r:
-            status = r.status
-            text_response = await r.text()
+            url = urls.TRANSLATE.format(host=await self._pick_service_url())
             
-            if status == 200:
-                data = await utils.format_json(text_response)
-                return data, r
+            async with session.get(url, params=params, proxy=self.proxy) as r:
+                status = r.status
+                text_response = await r.text()
+                
+                if status == 200:
+                    data = await utils.format_json(text_response)
+                    return data, r
 
-            if self.raise_exception:
-                raise Exception('Unexpected status code "{}" from {}'.format(
-                    status, self.service_urls))
+                if self.raise_exception:
+                    raise Exception('Unexpected status code "{}" from {}'.format(
+                        status, self.service_urls))
 
-            DUMMY_DATA[0][0][0] = text
-            return DUMMY_DATA, r
+                DUMMY_DATA[0][0][0] = text
+                return DUMMY_DATA, r
 
     def _parse_extra_data(self, data):
         response_parts_name_mapping = {
@@ -296,9 +289,16 @@ class Translator:
             
             self.connector = connector
             
-            # Reset session (will be recreated on next request)
-            self._session = None
-            self.token_acquirer = None
+            # Reset session
+            self._session = aiohttp.ClientSession(
+                    connector=self.connector,
+                    connector_owner=True,
+                    timeout=self.timeout,
+                    headers={'User-Agent': self.user_agent}
+                )
+            if self.client_type == 'webapp':
+                self.token_acquirer = TokenAcquirer(
+                    session=self._session, host=self.service_urls[0])
 
     async def translate(self, text, dest='en', src='auto', **kwargs):
         """Translate text from source language to destination language

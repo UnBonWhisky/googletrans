@@ -59,6 +59,7 @@ class Translator:
     def __init__(self, service_urls=DEFAULT_CLIENT_SERVICE_URLS, user_agent=DEFAULT_USER_AGENT,
                  raise_exception=DEFAULT_RAISE_EXCEPTION,
                  proxy: str = None,
+                 proxy_auth: tuple = None,
                  timeout: aiohttp.ClientTimeout = None,
                  connector_limit: int = 100):
 
@@ -76,6 +77,7 @@ class Translator:
             else:
                 # HTTP/HTTPS proxy
                 self.proxy = proxy
+                self.proxy_auth = aiohttp.BasicAuth(*proxy_auth) if proxy_auth else None
         
         if connector is None:
             connector = aiohttp.TCPConnector(limit=self.connector_limit)
@@ -201,7 +203,7 @@ class Translator:
                 'rt': 'c',
             }
             
-            async with session.post(url, params=params, data=data, proxy=self.proxy, allow_redirects=True) as r:
+            async with session.post(url, params=params, data=data, proxy=self.proxy, proxy_auth=self.proxy_auth, allow_redirects=True) as r:
                 status = r.status
                 text = await r.text()
                 
@@ -225,7 +227,7 @@ class Translator:
 
             url = urls.TRANSLATE.format(host=await self._pick_service_url())
             
-            async with session.get(url, params=params, proxy=self.proxy) as r:
+            async with session.get(url, params=params, proxy=self.proxy, proxy_auth=self.proxy_auth) as r:
                 status = r.status
                 text_response = await r.text()
                 
@@ -263,7 +265,7 @@ class Translator:
 
         return extra
     
-    async def change_proxy(self, proxy: str = None):
+    async def change_proxy(self, proxy: str = None, proxy_auth: tuple = None):
         """Change proxy during runtime
 
         :param proxy:  proxies configuration.
@@ -276,6 +278,7 @@ class Translator:
             
             connector = None
             self.proxy = None
+            self.proxy_auth = None
             
             if proxy is not None:
                 if proxy.startswith('socks5') or proxy.startswith('socks4'):
@@ -283,6 +286,7 @@ class Translator:
                 else:
                     # HTTP/HTTPS proxy
                     self.proxy = proxy
+                    self.proxy_auth = aiohttp.BasicAuth(*proxy_auth) if proxy_auth else None
             
             if connector is None:
                 connector = aiohttp.TCPConnector(limit=self.connector_limit)

@@ -77,7 +77,7 @@ class Translator:
             else:
                 # HTTP/HTTPS proxy
                 self.proxy = proxy
-                self.proxy_auth = aiohttp.BasicAuth(*proxy_auth) if proxy_auth else None
+                self.proxy_auth = aiohttp.BasicAuth(proxy_auth[0], proxy_auth[1]) if proxy_auth else None
         
         if connector is None:
             connector = aiohttp.TCPConnector(limit=self.connector_limit)
@@ -286,7 +286,7 @@ class Translator:
                 else:
                     # HTTP/HTTPS proxy
                     self.proxy = proxy
-                    self.proxy_auth = aiohttp.BasicAuth(*proxy_auth) if proxy_auth else None
+                    self.proxy_auth = aiohttp.BasicAuth(proxy_auth[0], proxy_auth[1]) if proxy_auth else None
             
             if connector is None:
                 connector = aiohttp.TCPConnector(limit=self.connector_limit)

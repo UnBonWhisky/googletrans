@@ -46,7 +46,7 @@ class TranslatedPart:
         self.candidates = candidates
 
     def __str__(self):
-        return self.text
+        return self.text if self.text is not None else ''
 
     def __dict__(self):
         return {

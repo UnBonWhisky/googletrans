@@ -459,7 +459,7 @@ class Translator:
         # not sure
         should_spacing = parsed[1][0][0][3]
         translated_parts = list(map(lambda part: TranslatedPart(part[0], part[1] if len(part) >= 2 else []), parsed[1][0][0][5]))
-        translated = (' ' if should_spacing else '').join(map(lambda part: part.text, translated_parts))
+        translated = (' ' if should_spacing else '').join(map(lambda part: part.text if part.text is not None else '', translated_parts))
 
         if src == 'auto':
             try:

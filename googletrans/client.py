@@ -66,6 +66,7 @@ class Translator:
         connector = None
         self.connector_limit = connector_limit
         self.proxy = None
+        self.proxy_auth = None
         self._use_proxy_connector = False
         
         self.rwlock = aiorwlock.RWLock(fast=True)

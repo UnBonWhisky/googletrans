@@ -466,10 +466,20 @@ class Translator:
 
         data = json.loads(resp)
         parsed = json.loads(data[0][2])
-        # not sure
-        should_spacing = parsed[1][0][0][3]
-        translated_parts = list(map(lambda part: TranslatedPart(part[0], part[1] if len(part) >= 2 else []), parsed[1][0][0][5]))
-        translated = (' ' if should_spacing else '').join(map(lambda part: part.text if part.text is not None else '', translated_parts))
+        # parsed[1][0][0] can be either:
+        #   - normal: [text, pronunciation, null, should_spacing(bool), null, [[parts...]], ...]
+        #   - gender-variant: [text, null, "(feminine/masculine)", null, null, null, ...]
+        # Detect gender-variant by checking if [3] is not a bool (spacing flag)
+        first = parsed[1][0][0]
+        should_spacing = first[3] if isinstance(first[3], bool) else False
+        raw_parts = first[5] if len(first) > 5 and isinstance(first[5], list) else None
+        if raw_parts is not None:
+            translated_parts = list(map(lambda part: TranslatedPart(part[0], part[1] if len(part) >= 2 else []), raw_parts))
+            translated = (' ' if should_spacing else '').join(part.text if part.text is not None else '' for part in translated_parts)
+        else:
+            # Gender-variant or no-parts response: use the text directly from [0]
+            translated_parts = []
+            translated = first[0] if first[0] is not None else ''
 
         if src == 'auto':
             try:

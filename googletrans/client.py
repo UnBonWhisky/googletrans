@@ -344,7 +344,12 @@ class Translator:
             jumps over  ->  이상 점프
             the lazy dog  ->  게으른 개
         """
-        src = src.lower().split('_', 1)[0]
+        # Normalize src: lowercase base, uppercase region (e.g. zh-tw -> zh-TW, pt-pt -> pt-PT)
+        if '-' in src:
+            _base, _region = src.split('-', 1)
+            src = _base.lower() + '-' + _region.upper()
+        else:
+            src = src.lower()
 
         if src != 'auto' and src not in LANGUAGES:
             if src in SPECIAL_CASES:
@@ -411,7 +416,12 @@ class Translator:
         return result
 
     async def translate_to_detect(self, text: str, dest='en', src='auto'):
-        src = src.lower().split('_', 1)[0]
+        # Normalize src: lowercase base, uppercase region (e.g. zh-tw -> zh-TW, pt-pt -> pt-PT)
+        if '-' in src:
+            _base, _region = src.split('-', 1)
+            src = _base.lower() + '-' + _region.upper()
+        else:
+            src = src.lower()
 
         if src != 'auto' and src not in LANGUAGES:
             if src in SPECIAL_CASES:

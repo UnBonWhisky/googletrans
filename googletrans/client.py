@@ -61,13 +61,15 @@ class Translator:
                  proxy: str = None,
                  proxy_auth: tuple = None,
                  timeout: aiohttp.ClientTimeout = None,
-                 connector_limit: int = 100):
+                 connector_limit: int = 100,
+                 ssl: bool = True):
 
         connector = None
         self.connector_limit = connector_limit
         self.proxy = None
         self.proxy_auth = None
         self._use_proxy_connector = False
+        self.ssl = ssl
         
         self.rwlock = aiorwlock.RWLock(fast=True)
         
@@ -81,7 +83,7 @@ class Translator:
                 self.proxy_auth = aiohttp.BasicAuth(proxy_auth[0], proxy_auth[1]) if proxy_auth else None
         
         if connector is None:
-            connector = aiohttp.TCPConnector(limit=self.connector_limit)
+            connector = aiohttp.TCPConnector(limit=self.connector_limit, ssl=self.ssl)
         
         self.connector = connector
         self.timeout = timeout if timeout is not None else aiohttp.ClientTimeout(total=30)
@@ -290,7 +292,7 @@ class Translator:
                     self.proxy_auth = aiohttp.BasicAuth(proxy_auth[0], proxy_auth[1]) if proxy_auth else None
             
             if connector is None:
-                connector = aiohttp.TCPConnector(limit=self.connector_limit)
+                connector = aiohttp.TCPConnector(limit=self.connector_limit, ssl=self.ssl)
             
             self.connector = connector
             

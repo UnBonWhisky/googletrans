@@ -18,8 +18,9 @@ from googletrans import urls, utils
 from googletrans.gtoken import TokenAcquirer
 from googletrans.constants import (
     DEFAULT_CLIENT_SERVICE_URLS,
-    DEFAULT_USER_AGENT, LANGCODES, LANGUAGES, SPECIAL_CASES,
-    DEFAULT_RAISE_EXCEPTION, DUMMY_DATA
+    DEFAULT_USER_AGENT, LANGCODES, LANGUAGES, LANGUAGES_LOWER, SPECIAL_CASES,
+    DEFAULT_RAISE_EXCEPTION, DUMMY_DATA,
+    NO_SPACING_LANGUAGES
 )
 from googletrans.models import Translated, Detected, TranslatedPart, Translate_to_Detect, RateLimitError
 
@@ -174,6 +175,30 @@ class Translator:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.close()
     
+    @staticmethod
+    def _normalize_lang(lang, kind):
+        """Return the canonical code of a language, whatever the case used.
+
+        Accepts a code ('fr', 'zh-cn', 'ZH-tW', 'crh-latn') or a language name
+        ('french'). `kind` is 'source' or 'destination' and is only used to
+        build the error message.
+
+        :rtype: str
+        """
+        try:
+            key = lang.strip().lower()
+        except AttributeError:
+            raise ValueError('invalid {} language'.format(kind))
+
+        if key in LANGUAGES_LOWER:
+            return LANGUAGES_LOWER[key]
+        if key in SPECIAL_CASES:
+            return SPECIAL_CASES[key]
+        if key in LANGCODES:
+            return LANGCODES[key]
+
+        raise ValueError('invalid {} language'.format(kind))
+
     @staticmethod
     async def _build_rpc_request(text: str, dest: str, src: str):
         return json.dumps([[
@@ -346,28 +371,15 @@ class Translator:
             jumps over  ->  이상 점프
             the lazy dog  ->  게으른 개
         """
-        # Normalize src: lowercase base, uppercase region (e.g. zh-tw -> zh-TW, pt-pt -> pt-PT)
-        if '-' in src:
-            _base, _region = src.split('-', 1)
-            src = _base.lower() + '-' + _region.upper()
+        # Both src and dest are normalized, so any casing is accepted
+        # (e.g. zh-tw -> zh-TW, CRH-LATN -> crh-Latn, French -> fr)
+        src = 'auto' if src is None else src
+        if isinstance(src, str) and src.strip().lower() == 'auto':
+            src = 'auto'
         else:
-            src = src.lower()
+            src = self._normalize_lang(src, 'source')
 
-        if src != 'auto' and src not in LANGUAGES:
-            if src in SPECIAL_CASES:
-                src = SPECIAL_CASES[src]
-            elif src in LANGCODES:
-                src = LANGCODES[src]
-            else:
-                raise ValueError('invalid source language')
-
-        if dest not in LANGUAGES:
-            if dest in SPECIAL_CASES:
-                dest = SPECIAL_CASES[dest]
-            elif dest in LANGCODES:
-                dest = LANGCODES[dest]
-            else:
-                raise ValueError('invalid destination language')
+        dest = self._normalize_lang(dest, 'destination')
 
         if isinstance(text, list):
             result = []
@@ -377,69 +389,36 @@ class Translator:
             return result
 
         origin = text
-        data, response = await self._translate(text, dest, src, kwargs)
+        # Use the batchexecute API (same as translate_to_detect) which is the
+        # current working endpoint. The old translate_a/single endpoint is deprecated.
+        inner = await self.translate_to_detect(text, dest=dest, src=src)
 
-        # this code will be updated when the format is changed.
-        translated = ''.join([d[0] if d[0] else '' for d in data[0]])
+        translated = inner.text
+        pron = inner.pronunciation
+        detected_src = inner.src
 
-        extra_data = self._parse_extra_data(data)
-
-        # actual source language that will be recognized by Google Translator when the
-        # src passed is equal to auto.
-        try:
-            temp_src = await self.translate_to_detect(text)
-            src = temp_src.src#data[2]
-        except RateLimitError:
-            raise
-        except Exception:  # pragma: nocover
-            pass
-
-        pron = origin
-        try:
-            pron = data[0][1][-2]
-        except Exception:  # pragma: nocover
-            pass
-
-        if pron is None:
-            try:
-                pron = data[0][1][2]
-            except Exception:  # pragma: nocover
-                pass
-
-        if dest in EXCLUDES and pron == origin:
+        if pron is None or (dest in EXCLUDES and pron == origin):
             pron = translated
 
-        # put final values into a new Translated object
-        result = Translated(src=src, dest=dest, origin=origin,
+        extra_data = inner.extra_data
+
+        result = Translated(src=detected_src, dest=dest, origin=origin,
                             text=translated, pronunciation=pron,
                             extra_data=extra_data,
-                            response=response)
+                            response=inner._response)
 
         return result
 
     async def translate_to_detect(self, text: str, dest='en', src='auto'):
-        # Normalize src: lowercase base, uppercase region (e.g. zh-tw -> zh-TW, pt-pt -> pt-PT)
-        if '-' in src:
-            _base, _region = src.split('-', 1)
-            src = _base.lower() + '-' + _region.upper()
+        # Both src and dest are normalized, so any casing is accepted
+        # (e.g. zh-tw -> zh-TW, CRH-LATN -> crh-Latn, French -> fr)
+        src = 'auto' if src is None else src
+        if isinstance(src, str) and src.strip().lower() == 'auto':
+            src = 'auto'
         else:
-            src = src.lower()
+            src = self._normalize_lang(src, 'source')
 
-        if src != 'auto' and src not in LANGUAGES:
-            if src in SPECIAL_CASES:
-                src = SPECIAL_CASES[src]
-            elif src in LANGCODES:
-                src = LANGCODES[src]
-            else:
-                raise ValueError('invalid source language')
-
-        if dest not in LANGUAGES:
-            if dest in SPECIAL_CASES:
-                dest = SPECIAL_CASES[dest]
-            elif dest in LANGCODES:
-                dest = LANGCODES[dest]
-            else:
-                raise ValueError('invalid destination language')
+        dest = self._normalize_lang(dest, 'destination')
 
         origin = text
         data, response = await self._translate_to_detect(text, dest, src)
@@ -473,15 +452,25 @@ class Translator:
         #   - gender-variant: [text, null, "(feminine/masculine)", null, null, null, ...]
         # Detect gender-variant by checking if [3] is not a bool (spacing flag)
         first = parsed[1][0][0]
-        should_spacing = first[3] if isinstance(first[3], bool) else False
+        # The spacing flag is kept if the API ever sends it again, otherwise the
+        # spacing is deduced from the destination language.
+        should_spacing = True
+        try:
+            if len(first) > 3 and isinstance(first[3], bool):
+                should_spacing = first[3]
+            else:
+                should_spacing = dest.lower() not in [lang.lower() for lang in NO_SPACING_LANGUAGES]
+        except Exception:
+            pass
         raw_parts = first[5] if len(first) > 5 and isinstance(first[5], list) else None
         if raw_parts is not None:
             translated_parts = list(map(lambda part: TranslatedPart(part[0], part[1] if len(part) >= 2 else []), raw_parts))
             translated = (' ' if should_spacing else '').join(part.text if part.text is not None else '' for part in translated_parts)
         else:
             # Gender-variant or no-parts response: use the text directly from [0]
-            translated_parts = []
             translated = first[0] if first[0] is not None else ''
+            # keep `parts` consistent with the text instead of leaving it empty
+            translated_parts = [TranslatedPart(first[0], [])] if first[0] is not None else []
 
         if src == 'auto':
             try:
@@ -509,11 +498,31 @@ class Translator:
         except Exception:
             pass
 
+        # All the variants returned for this translation, e.g. for en->es "teacher":
+        # [{'text': 'maestra', 'label': '(feminine)'}, {'text': 'maestro', 'label': '(masculine)'}]
+        # Stays None when there is nothing more to expose than the main text
+        # (a single variant without label).
+        variants = None
+        try:
+            collected = []
+            for variant in parsed[1][0]:
+                if not isinstance(variant, list) or variant[0] is None:
+                    continue
+                collected.append({
+                    'text': variant[0],
+                    'label': variant[2] if len(variant) > 2 else None,
+                })
+            if len(collected) > 1 or (collected and collected[0]['label'] is not None):
+                variants = collected
+        except Exception:
+            pass
+
         extra_data = {
             'confidence': confidence,
             'parts': translated_parts,
             'origin_pronunciation': origin_pronunciation,
             'parsed': parsed,
+            'variants': variants,
         }
         result = Translate_to_Detect(src=src, dest=dest, origin=origin,
                             text=translated, pronunciation=pronunciation,

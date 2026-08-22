@@ -1,5 +1,11 @@
 DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
 
+# Languages that do not put a space between sentences/segments.
+# Google used to send a `should_spacing` boolean in the response, but it is now
+# always null, so the spacing is deduced from the destination language instead.
+# The comparison is case insensitive.
+NO_SPACING_LANGUAGES = ('ja', 'zh', 'zh-CN', 'zh-TW')
+
 DEFAULT_CLIENT_SERVICE_URLS = (
     'translate.googleapis.com',
 )
@@ -466,7 +472,7 @@ FLAG_CODES = {
     '🇱🇦': 'lo',
     '🇱🇧': 'ar',
     '🇱🇨': 'en',
-    '🇱🇮': 'ge',
+    '🇱🇮': 'de',
     '🇱🇰': 'si',
     '🇱🇷': 'en',
     '🇱🇸': 'en',
@@ -599,6 +605,10 @@ LANGKEYS = list(LANGUAGES.keys())
 LANGNAMES = list(LANGUAGES.values())
 
 LANGCODES = dict(map(reversed, LANGUAGES.items()))
+# Case insensitive lookup for the language codes. Google mixes conventions
+# ('zh-CN' but 'crh-Latn'), so the canonical code is resolved from the
+# lowercase form instead of guessing how the subtag should be cased.
+LANGUAGES_LOWER = {code.lower(): code for code in LANGUAGES}
 DEFAULT_RAISE_EXCEPTION = False
 DUMMY_DATA = [[["", None, None, 0]], None, "en", None,
               None, None, 1, None, [["en"], None, [1], ["en"]]]
